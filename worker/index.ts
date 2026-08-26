@@ -5,20 +5,9 @@
 import { authorize } from './auth'
 import { handleSync } from './sync'
 import { handleLabMarkerNames, handleLabTrend, handleRollup, handleSummary } from './trends'
+import { json } from './http'
 import { BadRequest, validateSyncRequest } from './validate'
 import { SYNC_SCHEMA_VERSION } from '../src/lib/sync-types'
-
-const JSON_HEADERS: Record<string, string> = {
-  'Content-Type': 'application/json; charset=utf-8',
-  // The dashboard holds personal health data and runs with no auth, so at the
-  // very least keep it out of search indexes.
-  'X-Robots-Tag': 'noindex, nofollow',
-  'Cache-Control': 'no-store',
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS })
-}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

@@ -19,7 +19,14 @@ import {
   saveMeta,
   type SyncMeta,
 } from './sync-meta'
-import { backoffDelay, isOffline, syncOnce, type SyncState } from './sync-client'
+import {
+  applySyncResult,
+  backoffDelay,
+  isOffline,
+  pushPull,
+  type SyncState,
+} from './sync-client'
+import { UnauthorizedError } from './api'
 
 const STORAGE_KEY = 'health-dashboard-v1'
 
@@ -189,7 +196,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     publish(meta, 'syncing')
 
     try {
-      const out = await syncOnce(dataRef.current, meta)
+      const { plan, res } = await pushPull(dataRef.current, meta)
+
+      // Re-read the refs rather than reusing the snapshot above: the user can
+      // submit an entry while the request is in flight, and the persistence
+      // effect will have recorded it in both. Merging into the snapshot would
+      // drop its dirty marker so it never uploaded, and would wipe the entry
+      // itself off the screen.
+      const out = applySyncResult(dataRef.current, metaRef.current ?? meta, plan, res)
       metaRef.current = out.meta
       saveMeta(out.meta)
       failuresRef.current = 0
@@ -206,17 +220,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       failuresRef.current += 1
       const outdated = err instanceof Error && err.message === 'schema mismatch'
+      const unauthorized = err instanceof UnauthorizedError
       publish(
         metaRef.current ?? meta,
-        outdated ? 'outdated' : isOffline() ? 'offline' : 'error',
+        outdated ? 'outdated' : unauthorized ? 'unauthorized' : isOffline() ? 'offline' : 'error',
         outdated
           ? 'This page is older than the server. Reload to get the latest version.'
           : err instanceof Error
             ? err.message
             : 'Sync failed'
       )
-      // An outdated client must not keep retrying; a reload is the only fix.
-      if (!outdated) arm(backoffDelay(failuresRef.current))
+      // Neither an outdated client nor a missing token is fixed by retrying:
+      // one needs a reload, the other needs the user to enter a token.
+      if (!outdated && !unauthorized) arm(backoffDelay(failuresRef.current))
     } finally {
       runningRef.current = false
     }

@@ -29,6 +29,15 @@ import {
   upsertSql,
 } from './db'
 
+/**
+ * A row is a tombstone when deletedAt is actually set. deletedAt is epoch ms, so
+ * 0 is a legal timestamp that reads as falsy: every test goes through here
+ * rather than relying on truthiness.
+ */
+function isTombstone(row: SyncRow): boolean {
+  return row.deletedAt !== null && row.deletedAt !== undefined
+}
+
 /** Rows returned per collection per pull before the response is truncated. */
 const PULL_LIMIT = 2000
 
@@ -94,10 +103,20 @@ async function applyChanges(
       statements.push(upsert.bind(...rowToBindings(def, row, now)))
       owners.push(def.key)
 
-        if (row.deletedAt === null || row.deletedAt === undefined) {
+      if (def.key === 'labs') {
+        // Markers are replaced wholesale with their panel, but only when the
+        // panel upsert above actually won. Both statements below carry the same
+        // guard, so a stale device syncing after a newer one cannot swap the
+        // newer panel's markers for its own, or strip them entirely with a
+        // tombstone whose panel write lost.
+        statements.push(db.prepare(DELETE_MARKERS_SQL).bind(row.id, row.updatedAt))
+        owners.push(null)
+
+        if (!isTombstone(row)) {
+          const markers = (row.markers as LabMarker[] | undefined) ?? []
           const insert = db.prepare(INSERT_MARKER_SQL)
           for (const m of markers) {
-            statements.push(insert.bind(...markerBindings(row.id, m)))
+            statements.push(insert.bind(...markerBindings(row.id, m, row.updatedAt)))
             owners.push(null)
           }
         }
@@ -143,8 +162,10 @@ async function applyChanges(
   return { applied, settingsApplied, rejected }
 }
 
+/** The table CHECK constraints, restated so a bad row fails alone. */
 function rowProblem(key: CollectionKey, row: SyncRow): string | null {
-  if (row.deletedAt !== null && row.deletedAt !== undefined) return null // tombstones carry no payload
+  if (isTombstone(row)) return null // tombstones carry no payload
+  const need = (field: string): string | null =>
     row[field] === undefined || row[field] === null || row[field] === ''
       ? `${field} is required`
       : null
@@ -219,7 +240,7 @@ async function readChanges(
 }
 
 async function attachMarkers(db: D1Database, panels: SyncRow[]): Promise<void> {
-  const live = panels.filter((p) => !p.deletedAt)
+  const live = panels.filter((p) => !isTombstone(p))
   if (live.length === 0) return
 
   const byPanel = new Map<string, LabMarker[]>()

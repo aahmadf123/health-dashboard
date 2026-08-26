@@ -216,6 +216,75 @@ try {
   )
   check('the queued entry syncs once the network returns', bGotOffline)
 
+  // --- An edit made while a sync is in flight must survive ------------------
+  // Regression: runSync used to merge the response into the snapshot it was
+  // built from, so an entry submitted during the round trip lost its dirty
+  // marker (never uploaded) and could be wiped off screen by the merge.
+  const c = await browser.newContext()
+  const pageC = await c.newPage()
+  await pageC.goto(BASE)
+  await waitForSynced(pageC)
+  const beforeCount = await sleepCount(pageC)
+
+  // Hold the next /api/sync open so an edit lands mid-request.
+  let release = () => {}
+  const held = new Promise((resolve) => {
+    release = resolve
+  })
+  let heldOnce = false
+  await pageC.route('**/api/sync', async (route) => {
+    if (!heldOnce) {
+      heldOnce = true
+      await held
+    }
+    await route.continue()
+  })
+
+  // Kick off a sync, then submit an entry while it is stuck in flight.
+  await pageC.click('button:has-text("Data")')
+  await pageC.click('button:has-text("Sync now")')
+  await pageC.waitForTimeout(400)
+
+  await pageC.click('button:has-text("Sleep")')
+  await pageC.fill('input[type="date"]', '2026-07-04')
+  await pageC.fill('input[placeholder="7.5"]', '8.25')
+  await pageC.click('button:has-text("Log night")')
+  await pageC.waitForTimeout(300)
+
+  // Also land a remote change, so the held response carries one. Without this
+  // the merge has nothing to write back and the on-screen half of the bug stays
+  // hidden: it only bites when applyPull actually replaces the data.
+  await pageB.click('button:has-text("Sleep")')
+  await pageB.fill('input[type="date"]', '2026-07-05')
+  await pageB.fill('input[placeholder="7.5"]', '5.5')
+  await pageB.click('button:has-text("Log night")')
+  await waitForSynced(pageB)
+
+  release()
+  await pageC.waitForTimeout(1500)
+  await pageC.unroute('**/api/sync')
+
+  const survivedOnScreen = await pageC.evaluate(() =>
+    JSON.parse(localStorage.getItem('health-dashboard-v1')).sleep.some(
+      (s) => s.date === '2026-07-04'
+    )
+  )
+  check(
+    'an entry submitted during a sync round trip is not wiped',
+    survivedOnScreen,
+    `${beforeCount} -> ${await sleepCount(pageC)} nights`
+  )
+
+  await waitForSynced(pageC)
+  await pageB.reload()
+  await waitForSynced(pageB)
+  const reachedB = await pageB.evaluate(() =>
+    JSON.parse(localStorage.getItem('health-dashboard-v1')).sleep.some(
+      (s) => s.date === '2026-07-04'
+    )
+  )
+  check('that entry still uploads rather than being silently dropped', reachedB)
+
   // --- The Trends tab renders from the server ------------------------------
   await pageA.click('button:has-text("Trends")')
   await pageA.waitForTimeout(2500)

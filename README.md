@@ -28,15 +28,18 @@ every record: weight, blood pressure, lab results, injections, journal notes.
 The address is unlisted, not secret. Treat it as private, and do not post it
 anywhere.
 
-To lock it down later, no code change is needed:
+To lock it down, set a token on the Worker and then enter the same token in the
+app:
 
 ```bash
 npx wrangler secret put API_TOKEN
 ```
 
-Every `/api/*` route already goes through one `authorize()` function in
+Every `/api/*` route goes through one `authorize()` function in
 `worker/auth.ts`, which starts requiring a bearer token as soon as that secret
-exists.
+exists. The app notices the 401, stops retrying, and asks for the token in the
+Data tab. Paste the same value there and it syncs again. The token is kept in
+that browser only, so each device needs it entered once.
 
 Backups from the Data tab are still worth keeping. They are the only copy that
 does not depend on the database.
@@ -77,7 +80,9 @@ npm run db:migrate:local   # once, to create the local database
 npm run dev                # Vite plus the Worker in workerd, with a local D1
 npm run build              # production build in dist/
 npm run lint
-node scripts/e2e-sync.mjs  # end-to-end sync tests against a running dev server
+node scripts/e2e-sync.mjs      # browser sync tests against a running dev server
+node scripts/api-sync-tests.mjs # conflict and tombstone tests against the API
+node scripts/auth-check.mjs     # token path; needs API_TOKEN in .dev.vars
 ```
 
 `npm run dev` serves the app and the API on one origin, the same way production

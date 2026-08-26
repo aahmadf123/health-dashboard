@@ -2,16 +2,24 @@
 // server changes, plus the retry and backoff policy around it.
 
 import type { AppData } from './model'
+import { apiFetch } from './api'
 import { SYNC_SCHEMA_VERSION, type SyncResponse } from './sync-types'
 import {
   applyPull,
   applyPushAck,
   buildPush,
   pendingCount,
+  type PushPlan,
   type SyncMeta,
 } from './sync-meta'
 
-export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error' | 'outdated'
+export type SyncStatus =
+  | 'idle'
+  | 'syncing'
+  | 'offline'
+  | 'error'
+  | 'outdated'
+  | 'unauthorized'
 
 export interface SyncState {
   status: SyncStatus
@@ -29,7 +37,7 @@ export function backoffDelay(failures: number): number {
 }
 
 async function postSync(since: number, body: unknown): Promise<SyncResponse> {
-  const res = await fetch('/api/sync', {
+  const res = await apiFetch('/api/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -66,13 +74,20 @@ export interface SyncOutcome {
 }
 
 /**
- * One sync round. Push first, then apply what comes back.
+ * The network half of a sync round: push what is queued, get back what changed.
  *
  * Push before pull matters on a first run: the local rows reach the server
  * before anything is merged in, so the server's newer-than guard resolves any
  * id collision in favour of what is already on this device.
+ *
+ * This deliberately returns rather than merging. The caller merges the response
+ * into whatever state exists once the request has landed, which may not be the
+ * state it was built from; see applySyncResult.
  */
-export async function syncOnce(data: AppData, meta: SyncMeta): Promise<SyncOutcome> {
+export async function pushPull(
+  data: AppData,
+  meta: SyncMeta
+): Promise<{ plan: PushPlan; res: SyncResponse }> {
   const plan = buildPush(data, meta)
 
   const res = await postSync(meta.cursor, {
@@ -88,6 +103,27 @@ export async function syncOnce(data: AppData, meta: SyncMeta): Promise<SyncOutco
     throw new SyncError('schema mismatch', 409, String(res.schemaVersion), meta.cursor)
   }
 
+  return { plan, res }
+}
+
+/**
+ * Merge a response into the CURRENT data and metadata.
+ *
+ * The caller must pass the state as it is now, not the snapshot the request was
+ * built from. A user can submit an entry while the request is in flight; merging
+ * into the snapshot would drop its dirty marker so it never uploaded, and would
+ * overwrite the entry itself on screen.
+ *
+ * Both helpers below already do the right thing once given current state:
+ * applyPushAck only clears a dirty id whose stamp still matches what was sent,
+ * and applyPull favours local on a timestamp tie.
+ */
+export function applySyncResult(
+  data: AppData,
+  meta: SyncMeta,
+  plan: PushPlan,
+  res: SyncResponse
+): SyncOutcome {
   const acked = applyPushAck(meta, plan, res)
   const pulled = applyPull(data, acked, res)
 

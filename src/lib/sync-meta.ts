@@ -46,6 +46,15 @@ function emptyByCollection<T>(make: () => T): Record<CollectionKey, T> {
   return out
 }
 
+/**
+ * A row is a tombstone when deletedAt is actually set. deletedAt is epoch ms, so
+ * 0 is a legal timestamp that reads as falsy; every test goes through here
+ * rather than relying on truthiness.
+ */
+export function isTombstone(row: { deletedAt?: number | null }): boolean {
+  return row.deletedAt !== null && row.deletedAt !== undefined
+}
+
 export function emptyMeta(): SyncMeta {
   return {
     version: 1,
@@ -202,7 +211,7 @@ export function buildPush(data: AppData, meta: SyncMeta, limit = PUSH_CHUNK): Pu
       const stamp = meta.rows[def.key][id]
       if (!stamp) continue
       record.push([id, stamp.u])
-      if (stamp.d) {
+      if (stamp.d !== undefined && stamp.d !== null) {
         rows.push({ id, updatedAt: stamp.u, deletedAt: stamp.d })
       } else {
         const entry = byId.get(id)
@@ -256,7 +265,8 @@ export function applyPushAck(meta: SyncMeta, plan: PushPlan, res: SyncResponse):
     const stamps = { ...rows[def.key] }
     let pruned = false
     for (const [id] of record) {
-      if (stamps[id]?.d && !dirty[def.key].includes(id)) {
+      const d = stamps[id]?.d
+      if (d !== undefined && d !== null && !dirty[def.key].includes(id)) {
         delete stamps[id]
         pruned = true
       }
@@ -320,8 +330,15 @@ export function applyPull(
     for (const row of incoming) {
       const local = stamps[row.id]
       // Ties favour local, which stops a row this device just pushed from
-      // bouncing straight back in and being re-marked dirty.
-      if (row.deletedAt !== null && row.deletedAt !== undefined) {
+      // bouncing straight back in and being re-marked dirty, and protects an
+      // edit made while the request was in flight.
+      if (local && local.u >= row.updatedAt) continue
+
+      if (isTombstone(row)) {
+        // Removing the entry is the whole point of a tombstone; dropping only
+        // the stamp would leave the row on screen and let the next pull re-add
+        // it.
+        if (byId.delete(row.id)) touched = true
         delete stamps[row.id]
         dirtySet.delete(row.id)
       } else {

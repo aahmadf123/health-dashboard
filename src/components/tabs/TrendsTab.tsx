@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { useAppData } from '../../lib/storage'
+import { apiFetch } from '../../lib/api'
 import { chartColors } from '../../lib/theme'
 import { lengthValue, round1, weightValue } from '../../lib/format'
 import type { LabMarkerTrendPoint, RollupResponse, TrendsSummary } from '../../lib/sync-types'
@@ -37,7 +38,9 @@ function tzMinutes(): number {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+  // apiFetch attaches the access token when one is configured, so the Trends
+  // endpoints keep working if API_TOKEN protection is turned on.
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`Request failed (${res.status})`)
   return (await res.json()) as T
 }

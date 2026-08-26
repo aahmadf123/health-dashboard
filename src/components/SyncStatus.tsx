@@ -14,7 +14,7 @@ export default function SyncStatus() {
   const { sync, syncNow } = useAppData()
 
   const dot =
-    sync.status === 'error' || sync.status === 'outdated'
+    sync.status === 'error' || sync.status === 'outdated' || sync.status === 'unauthorized'
       ? critical
       : sync.status === 'offline'
         ? warning
@@ -23,17 +23,19 @@ export default function SyncStatus() {
           : good
 
   const label =
-    sync.status === 'outdated'
-      ? 'Reload needed'
-      : sync.status === 'error'
-        ? 'Sync failed'
-        : sync.status === 'offline'
-          ? 'Offline'
-          : sync.status === 'syncing'
-            ? 'Syncing'
-            : sync.pending > 0
-              ? `${sync.pending} pending`
-              : 'Synced'
+    sync.status === 'unauthorized'
+      ? 'Token needed'
+      : sync.status === 'outdated'
+        ? 'Reload needed'
+        : sync.status === 'error'
+          ? 'Sync failed'
+          : sync.status === 'offline'
+            ? 'Offline'
+            : sync.status === 'syncing'
+              ? 'Syncing'
+              : sync.pending > 0
+                ? `${sync.pending} pending`
+                : 'Synced'
 
   const title =
     sync.message ??

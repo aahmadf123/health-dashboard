@@ -117,14 +117,34 @@ function safeJsonArray(v: unknown): string[] {
 // mergeLabPanels already treats them, so markers carry no timestamps of their
 // own and are replaced wholesale whenever their panel is written.
 
-export const DELETE_MARKERS_SQL = 'DELETE FROM lab_markers WHERE panel_id = ?'
+/**
+ * Both marker statements are guarded on the panel upsert having won.
+ *
+ * The upsert writes `updated_at = <incoming>` only when the incoming row is
+ * newer, so comparing the stored value against the incoming one says whether
+ * our write landed. Keeping the test in SQL means the guard stays inside the
+ * same batch, which is one transaction; reading the winners back first would
+ * split it.
+ *
+ * Without this, a stale device syncing after a newer one would leave the newer
+ * panel row intact but replace its markers with stale ones, or, for a stale
+ * tombstone, strip every marker from a panel that is still live.
+ */
+export const DELETE_MARKERS_SQL =
+  'DELETE FROM lab_markers WHERE panel_id = ?1 ' +
+  'AND EXISTS (SELECT 1 FROM labs WHERE id = ?1 AND updated_at = ?2)'
 
 export const INSERT_MARKER_SQL =
   'INSERT OR REPLACE INTO lab_markers ' +
   '(panel_id, name, value, value_text, unit, ref_low, ref_high, status) ' +
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 ' +
+  'WHERE EXISTS (SELECT 1 FROM labs WHERE id = ?1 AND updated_at = ?9)'
 
-export function markerBindings(panelId: string, m: LabMarker): SqlValue[] {
+export function markerBindings(
+  panelId: string,
+  m: LabMarker,
+  panelUpdatedAt: number
+): SqlValue[] {
   return [
     panelId,
     m.name,
@@ -134,6 +154,7 @@ export function markerBindings(panelId: string, m: LabMarker): SqlValue[] {
     m.refLow === null || m.refLow === undefined ? null : Number(m.refLow),
     m.refHigh === null || m.refHigh === undefined ? null : Number(m.refHigh),
     m.status ?? 'unknown',
+    panelUpdatedAt,
   ]
 }
 

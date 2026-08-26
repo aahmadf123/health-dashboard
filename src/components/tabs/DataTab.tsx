@@ -18,6 +18,7 @@ import {
 import { toCanonicalLb, weightValue, round1 } from '../../lib/format'
 import { Card, Field, Button, inputClass } from '../ui'
 import { PREMIGRATION_KEY } from '../../lib/sync-meta'
+import { getApiToken, setApiToken } from '../../lib/api'
 import { downloadFile as saveFile } from '../../lib/export'
 
 /** Sync state, plus the one-time snapshot taken before this device first uploaded. */
@@ -32,17 +33,19 @@ function SyncPanel() {
   })
 
   const label =
-    sync.status === 'outdated'
-      ? 'This page is older than the server. Reload to get the latest version.'
-      : sync.status === 'offline'
-        ? 'Offline. Changes are queued and will sync when you reconnect.'
-        : sync.status === 'error'
-          ? `Sync failed: ${sync.message ?? 'unknown error'}`
-          : sync.pending > 0
-            ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
-            : sync.lastSyncedAt
-              ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}`
-              : 'Not synced yet'
+    sync.status === 'unauthorized'
+      ? 'This dashboard needs an access token before it can sync.'
+      : sync.status === 'outdated'
+        ? 'This page is older than the server. Reload to get the latest version.'
+        : sync.status === 'offline'
+          ? 'Offline. Changes are queued and will sync when you reconnect.'
+          : sync.status === 'error'
+            ? `Sync failed: ${sync.message ?? 'unknown error'}`
+            : sync.pending > 0
+              ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+              : sync.lastSyncedAt
+                ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}`
+                : 'Not synced yet'
 
   return (
     <div className="text-right">
@@ -69,6 +72,25 @@ function SyncPanel() {
           </Button>
         )}
       </div>
+      {sync.status === 'unauthorized' && (
+        <div className="mt-2">
+          <Field label="Access token">
+            <input
+              type="password"
+              defaultValue={getApiToken()}
+              onBlur={(e) => {
+                setApiToken(e.target.value.trim())
+                syncNow()
+              }}
+              className={inputClass}
+              placeholder="Paste the API_TOKEN you set on the Worker"
+            />
+          </Field>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            This dashboard is protected by a token. It is stored in this browser only.
+          </p>
+        </div>
+      )}
       {sync.quarantined > 0 && (
         <div className="mt-1 text-xs text-[var(--muted)]">
           {sync.quarantined} entr{sync.quarantined === 1 ? 'y was' : 'ies were'} rejected by the

@@ -6,6 +6,8 @@
  * (`wrangler secret put API_TOKEN`) turns on bearer-token checking across every
  * route without touching route code.
  */
+import { JSON_HEADERS } from './http'
+
 export function authorize(request: Request, env: Env): Response | null {
   const expected = env.API_TOKEN
   if (!expected) return null
@@ -16,10 +18,9 @@ export function authorize(request: Request, env: Env): Response | null {
 
   return new Response(JSON.stringify({ error: 'Unauthorized' }), {
     status: 401,
-    headers: {
-      'Content-Type': 'application/json',
-      'WWW-Authenticate': 'Bearer',
-    },
+    // Same headers as every other response: a 401 still must not be indexed or
+    // cached, since the URL itself is the only thing keeping this data private.
+    headers: { ...JSON_HEADERS, 'WWW-Authenticate': 'Bearer' },
   })
 }
 
