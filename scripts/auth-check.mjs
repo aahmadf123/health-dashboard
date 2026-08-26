@@ -9,7 +9,7 @@
 // Remember to delete .dev.vars afterwards, or the rest of the suite will 401.
 
 import { chromium } from 'playwright'
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
 const results = []
 const check = (n, p, d='') => { results.push(p); console.log(`${p?'PASS':'FAIL'}  ${n}${d?`  (${d})`:''}`) }
 
