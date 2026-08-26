@@ -9,7 +9,9 @@ import InjectionsTab from './components/tabs/InjectionsTab'
 import MeasurementsTab from './components/tabs/MeasurementsTab'
 import SleepTab from './components/tabs/SleepTab'
 import JournalTab from './components/tabs/JournalTab'
+import TrendsTab from './components/tabs/TrendsTab'
 import DataTab from './components/tabs/DataTab'
+import SyncStatus from './components/SyncStatus'
 
 export type TabKey =
   | 'overview'
@@ -20,6 +22,7 @@ export type TabKey =
   | 'measurements'
   | 'sleep'
   | 'journal'
+  | 'trends'
   | 'data'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
@@ -31,6 +34,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'measurements', label: 'Measurements' },
   { key: 'sleep', label: 'Sleep' },
   { key: 'journal', label: 'Journal' },
+  { key: 'trends', label: 'Trends' },
   { key: 'data', label: 'Data' },
 ]
 
@@ -78,6 +82,7 @@ function Shell() {
         </svg>
         <h1 className="text-lg font-bold sm:text-xl">Health Dashboard</h1>
         <div className="ml-auto flex items-center gap-2">
+          <SyncStatus />
           <button
             type="button"
             onClick={toggleUnits}
@@ -127,6 +132,7 @@ function Shell() {
         {tab === 'measurements' && <MeasurementsTab isDark={isDark} />}
         {tab === 'sleep' && <SleepTab isDark={isDark} />}
         {tab === 'journal' && <JournalTab />}
+        {tab === 'trends' && <TrendsTab isDark={isDark} />}
         {tab === 'data' && <DataTab />}
       </main>
 
@@ -136,7 +142,8 @@ function Shell() {
           results and before changing any medication.
         </p>
         <p className="mt-1">
-          Your data is stored only in this browser. Back it up from the Data tab.
+          Your data syncs to a private database and is cached in this browser so the app
+          works offline. It is not password protected, so treat the address as private.
         </p>
       </footer>
     </div>

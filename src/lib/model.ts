@@ -1,4 +1,9 @@
-// Core data model. All data lives in localStorage; nothing leaves the browser.
+// Core data model. Entries sync to a Cloudflare D1 database and are cached in
+// localStorage so the app keeps working offline.
+//
+// AppData.version stays 1 on purpose. loadData() in storage.tsx discards
+// anything that is not version 1, so bumping it would silently wipe existing
+// browsers. Sync metadata lives in its own key instead; see sync-meta.ts.
 
 export type Units = 'lb' | 'kg'
 export type Theme = 'system' | 'light' | 'dark'
