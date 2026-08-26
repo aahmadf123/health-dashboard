@@ -68,7 +68,7 @@ function validateRow(key: CollectionKey, raw: unknown, now: number): SyncRow {
         : asTimestamp(obj.deletedAt, 'deletedAt', now),
   }
   // A tombstone carries no payload; validating absent fields would reject it.
-  if (row.deletedAt) return row
+  if (row.deletedAt !== null && row.deletedAt !== undefined) return row
 
   for (const c of def.columns) {
     const v = obj[c.field]
