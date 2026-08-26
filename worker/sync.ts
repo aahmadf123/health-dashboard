@@ -94,11 +94,7 @@ async function applyChanges(
       statements.push(upsert.bind(...rowToBindings(def, row, now)))
       owners.push(def.key)
 
-      if (def.key === 'labs') {
-        statements.push(db.prepare(DELETE_MARKERS_SQL).bind(row.id))
-        owners.push(null)
-        if (!row.deletedAt) {
-          const markers = (row.markers as LabMarker[] | undefined) ?? []
+        if (row.deletedAt === null || row.deletedAt === undefined) {
           const insert = db.prepare(INSERT_MARKER_SQL)
           for (const m of markers) {
             statements.push(insert.bind(...markerBindings(row.id, m)))
