@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "health-dashboard",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-26",
+  "observability": { "enabled": true },
+  // directory is set by @cloudflare/vite-plugin from the client build output.
+  "assets": {
+    // The SPA has no server-side routes, so any unmatched path serves index.html.
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // Everything except /api/* is served straight from the edge without
+    // invoking the Worker at all.
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "health-dashboard",
+      "database_id": "d0bc9a30-9233-4585-a9ef-b3a598ed8271",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

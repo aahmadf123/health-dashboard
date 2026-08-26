@@ -17,6 +17,67 @@ import {
 } from '../../lib/export'
 import { toCanonicalLb, weightValue, round1 } from '../../lib/format'
 import { Card, Field, Button, inputClass } from '../ui'
+import { PREMIGRATION_KEY } from '../../lib/sync-meta'
+import { downloadFile as saveFile } from '../../lib/export'
+
+/** Sync state, plus the one-time snapshot taken before this device first uploaded. */
+function SyncPanel() {
+  const { sync, syncNow } = useAppData()
+  const [premigration, setPremigration] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(PREMIGRATION_KEY)
+    } catch {
+      return null
+    }
+  })
+
+  const label =
+    sync.status === 'outdated'
+      ? 'This page is older than the server. Reload to get the latest version.'
+      : sync.status === 'offline'
+        ? 'Offline. Changes are queued and will sync when you reconnect.'
+        : sync.status === 'error'
+          ? `Sync failed: ${sync.message ?? 'unknown error'}`
+          : sync.pending > 0
+            ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+            : sync.lastSyncedAt
+              ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}`
+              : 'Not synced yet'
+
+  return (
+    <div className="text-right">
+      <div className="mb-1 text-xs text-[var(--muted)]">{label}</div>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button onClick={syncNow}>Sync now</Button>
+        {premigration && (
+          <Button
+            onClick={() => {
+              saveFile(
+                stampedName('health-backup-before-sync', 'json'),
+                premigration,
+                'application/json'
+              )
+              try {
+                localStorage.removeItem(PREMIGRATION_KEY)
+              } catch {
+                // Nothing to do; the download already happened.
+              }
+              setPremigration(null)
+            }}
+          >
+            Download pre-sync backup
+          </Button>
+        )}
+      </div>
+      {sync.quarantined > 0 && (
+        <div className="mt-1 text-xs text-[var(--muted)]">
+          {sync.quarantined} entr{sync.quarantined === 1 ? 'y was' : 'ies were'} rejected by the
+          server and will not retry.
+        </div>
+      )}
+    </div>
+  )
+}
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null
 
@@ -142,7 +203,8 @@ export default function DataTab() {
     <div className="space-y-4">
       <Card
         title="Where your data lives"
-        subtitle="Everything is stored in this browser only. Nothing is uploaded to any server, so download a backup now and then, and use it to move your data to another device."
+        subtitle="Your entries sync to a private Cloudflare D1 database and are cached in this browser, so the app works offline and picks up again on any device. The database has no password, so treat the address as private. Backups are still worth keeping."
+        actions={<SyncPanel />}
       >
         <ul className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
           {counts.map(([label, n]) => (
@@ -277,10 +339,13 @@ export default function DataTab() {
           <Button
             variant="danger"
             onClick={() => {
+              // This now deletes from the database too: the sync diff turns the
+              // emptied lists into tombstones that every other device applies.
               if (
                 window.confirm(
-                  'Delete ALL data from this browser? Download a backup first if you want to keep anything.'
-                )
+                  'Delete ALL data, on every device and in the database? Download a backup first if you want to keep anything.'
+                ) &&
+                window.confirm('Really delete everything? This cannot be undone.')
               ) {
                 replace(emptyData())
               }
@@ -289,7 +354,7 @@ export default function DataTab() {
             Clear all data
           </Button>
           <span className="text-xs text-[var(--muted)]">
-            Removes everything stored in this browser. This cannot be undone.
+            Deletes everything everywhere, not just in this browser. This cannot be undone.
           </span>
         </div>
       </Card>
