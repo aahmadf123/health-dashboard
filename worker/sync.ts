@@ -147,10 +147,8 @@ async function applyChanges(
   return { applied, settingsApplied, rejected }
 }
 
-/** The table CHECK constraints, restated so a bad row fails alone. */
 function rowProblem(key: CollectionKey, row: SyncRow): string | null {
-  if (row.deletedAt) return null // tombstones carry no payload
-  const need = (field: string): string | null =>
+  if (row.deletedAt !== null && row.deletedAt !== undefined) return null // tombstones carry no payload
     row[field] === undefined || row[field] === null || row[field] === ''
       ? `${field} is required`
       : null
