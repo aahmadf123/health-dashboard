@@ -17,9 +17,11 @@ export function authorize(request: Request, env: Env): Response | null {
   return new Response(JSON.stringify({ error: 'Unauthorized' }), {
     status: 401,
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       'WWW-Authenticate': 'Bearer',
-    },
+      'X-Robots-Tag': 'noindex, nofollow',
+      'Cache-Control': 'no-store',
+    }
   })
 }
 
