@@ -321,10 +321,7 @@ export function applyPull(
       const local = stamps[row.id]
       // Ties favour local, which stops a row this device just pushed from
       // bouncing straight back in and being re-marked dirty.
-      if (local && local.u >= row.updatedAt) continue
-
-      if (row.deletedAt) {
-        if (byId.delete(row.id)) touched = true
+      if (row.deletedAt !== null && row.deletedAt !== undefined) {
         delete stamps[row.id]
         dirtySet.delete(row.id)
       } else {
