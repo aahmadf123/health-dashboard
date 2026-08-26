@@ -78,7 +78,14 @@ export async function handleRollup(url: URL, db: D1Database): Promise<RollupResp
   const from = url.searchParams.get('from')
   if (from) {
     where.push(def.time === 'ts' ? 'ts >= ?' : 'date >= ?')
-    binds.push(def.time === 'ts' ? Date.parse(from) : from)
+    if (def.time === 'ts') {
+      const parsed = Date.parse(from)
+      if (!Number.isFinite(parsed)) throw new BadRequest('from must be YYYY-MM-DD')
+      binds.push(parsed)
+    } else {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new BadRequest('from must be YYYY-MM-DD')
+      binds.push(from)
+    }
   }
 
   const sql =
