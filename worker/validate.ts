@@ -104,6 +104,10 @@ function validateMarkers(v: unknown): LabMarker[] {
     const m = asObject(raw, 'marker')
     const name = asText(m.name, 'marker name')
     if (!name) throw new BadRequest('every marker needs a name')
+    const status = asText(m.status, 'status') ?? 'unknown'
+    if (!['optimal', 'average', 'outOfRange', 'unknown'].includes(status)) {
+      throw new BadRequest('bad marker status')
+    }
     return {
       name,
       value: asNumber(m.value, 'marker value'),
@@ -111,7 +115,7 @@ function validateMarkers(v: unknown): LabMarker[] {
       unit: asText(m.unit, 'marker unit') ?? '',
       refLow: asNumber(m.refLow, 'refLow'),
       refHigh: asNumber(m.refHigh, 'refHigh'),
-      status: (asText(m.status, 'status') ?? 'unknown') as LabMarker['status'],
+      status: status as LabMarker['status'],
     }
   })
 }
