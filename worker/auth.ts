@@ -1,13 +1,14 @@
+import { JSON_HEADERS } from './http'
+
 /**
  * The single authorization seam.
  *
  * Every /api/* route calls this. Today the dashboard runs with no auth, so an
  * unset API_TOKEN allows everything. Setting that one secret
  * (`wrangler secret put API_TOKEN`) turns on bearer-token checking across every
- * route without touching route code.
+ * route without touching route code, and the client attaches the token from
+ * src/lib/api.ts.
  */
-import { JSON_HEADERS } from './http'
-
 export function authorize(request: Request, env: Env): Response | null {
   const expected = env.API_TOKEN
   if (!expected) return null
@@ -20,6 +21,7 @@ export function authorize(request: Request, env: Env): Response | null {
     status: 401,
     // Same headers as every other response: a 401 still must not be indexed or
     // cached, since the URL itself is the only thing keeping this data private.
+    // Sharing the constant with worker/http.ts keeps the two from drifting.
     headers: { ...JSON_HEADERS, 'WWW-Authenticate': 'Bearer' },
   })
 }
